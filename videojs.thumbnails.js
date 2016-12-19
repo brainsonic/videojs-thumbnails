@@ -69,7 +69,7 @@
   /**
    * register the thubmnails plugin
    */
-  videojs.plugin('thumbnails', function(options) {
+  videojs.plugin('thumbnails', function(options, thumbOptions) {
     var div, settings, img, player, progressControl, duration, moveListener, moveCancel;
     settings = extend({}, defaults, options);
     player = this;
@@ -97,9 +97,20 @@
     // create the thumbnail
     div = document.createElement('div');
     div.className = 'vjs-thumbnail-holder';
-    img = document.createElement('img');
-    div.appendChild(img);
-    img.src = settings['0'].src;
+    var img;
+    
+    if(thumbOptions)
+    {
+        img = document.createElement('div');
+        img.style.backgroundImage='url('+settings['0'].src+')';
+        img.style.width='128px';
+        img.style.height='72px';
+    }else{
+        img = document.createElement('img');
+        img.src = settings['0'].src;        
+    }
+    
+    div.appendChild(img);    
     img.className = 'vjs-thumbnail';
     extend(img.style, settings['0'].style);
 
@@ -126,6 +137,17 @@
     // add the thumbnail to the player
     progressControl = player.controlBar.progressControl;
     progressControl.el().appendChild(div);
+    
+    // find the proper element to use for time calculations
+    var eleForTime;
+    for( var e in progressControl.el().childNodes ) {
+        var childNode = progressControl.el().childNodes[e];
+            if( childNode.className.indexOf('vjs-progress-holder') >= 0 ) {
+                eleForTime = childNode;
+            break;
+        }
+     }
+
 
     moveListener = function(event) {
       var mouseTime, time, active, left, setting, pageX, right, width, halfWidth, pageXOffset, clientRect;
@@ -142,28 +164,68 @@
       // find the page offset of the mouse
       left = pageX || (event.clientX + document.body.scrollLeft + document.documentElement.scrollLeft);
       // subtract the page offset of the positioned offset parent
-      left -= offsetParent(progressControl.el()).getBoundingClientRect().left + pageXOffset;
+      //left -= offsetParent(progressControl.el()).getBoundingClientRect().left + pageXOffset;
+      left -= eleForTime.getBoundingClientRect().left + pageXOffset;
 
       // apply updated styles to the thumbnail if necessary
       // mouseTime is the position of the mouse along the progress control bar
       // `left` applies to the mouse position relative to the player so we need
       // to remove the progress control's left offset to know the mouse position
       // relative to the progress control
-      mouseTime = Math.floor((left - progressControl.el().offsetLeft) / progressControl.width() * duration);
-      for (time in settings) {
-        if (mouseTime > time) {
-          active = Math.max(active, time);
+      //mouseTime = Math.floor((left - progressControl.el().offsetLeft) / progressControl.width() * duration);
+      oldMouseTime = Math.floor((left - progressControl.el().offsetLeft) / progressControl.width() * duration);
+      mouseTime = left / eleForTime.getBoundingClientRect().width * duration;
+      mouseTime = Math.max(0, mouseTime);
+      
+      if(thumbOptions)
+      {
+        var tmp = thumbOptions.format.split("x");
+        formatWidth=tmp[0];
+        formatHeight=tmp[1];
+        
+        tileImgHeight=thumbOptions.height;
+        tileImgWidth=thumbOptions.width;
+        nbTiles = formatWidth * formatHeight;
+        
+        tileDuration = duration / nbTiles;
+        iteratorDuration = 0;
+        var targetLine,targetColumn; 
+        targetLine = -1;
+        for(line = 0;line < formatHeight && targetLine < 0; line++)
+        {
+          for(column = 0;column < formatWidth && targetLine < 0; column++)
+          {
+            if( (iteratorDuration + tileDuration) > mouseTime)
+            {
+              targetLine = line;
+              targetColumn = column;
+              break;
+            }
+            iteratorDuration += tileDuration;
+          }
         }
+        var backgroundPositionTop = (-1) * targetLine * tileImgHeight;
+        var backgroundPositionLeft = (-1) * targetColumn * tileImgWidth;
+        
+        var backgroundPosition = backgroundPositionLeft + 'px '+backgroundPositionTop + 'px';
+        img.style.backgroundPosition = backgroundPosition;
+        
+      }else{          
+        for (time in settings) {
+            if (mouseTime > time) {
+              active = Math.max(active, time);
+            }
+          }
+          setting = settings[active];
+          if (setting.src && img.src != setting.src) {
+            img.src = setting.src;
+          }
+          if (setting.style && img.style != setting.style) {
+            extend(img.style, setting.style);
+          }
+    
+          width = getVisibleWidth(img, setting.width || settings[0].width);
       }
-      setting = settings[active];
-      if (setting.src && img.src != setting.src) {
-        img.src = setting.src;
-      }
-      if (setting.style && img.style != setting.style) {
-        extend(img.style, setting.style);
-      }
-
-      width = getVisibleWidth(img, setting.width || settings[0].width);
       halfWidth = width / 2;
 
       // make sure that the thumbnail doesn't fall off the right side of the left side of the player
