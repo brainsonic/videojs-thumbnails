@@ -103,23 +103,28 @@
     {
         img = document.createElement('div');
         img.style.backgroundImage='url('+settings['0'].src+')';
-        img.style.width='128px';
-        img.style.height='72px';
+        img.style.width=thumbOptions.width+'px';
+        img.style.height=thumbOptions.height+'px';
     }else{
         img = document.createElement('img');
         img.src = settings['0'].src;        
     }
     
-    div.appendChild(img);    
+    
     img.className = 'vjs-thumbnail';
     extend(img.style, settings['0'].style);
-
     // center the thumbnail over the cursor if an offset wasn't provided
     if (!img.style.left && !img.style.right) {
       img.onload = function() {
+      console.log("naturalWidth", img.naturalWidth);
         img.style.left = -(img.naturalWidth / 2) + 'px';
       };
     }
+    if(thumbOptions)
+    {
+        img.style.left = -(thumbOptions.width / 2) + 'px';
+    }
+    div.appendChild(img);
 
     // keep track of the duration to calculate correct thumbnail to display
     duration = player.duration();
